@@ -23,7 +23,7 @@ interface Preview {
     files: File[];
     port?: number;
     server?: any;
-    slide?: Slide;
+    shownSlide?: Slide;              // absolute slide number shown in the preview
     panel?: vscode.WebviewPanel;
 };
 
@@ -56,8 +56,8 @@ export function activate(context: vscode.ExtensionContext) {
             // this is the absolute slide, if it's different than the currently displayed one, show it
             const absSlide = shiftSlide(getEditorSlide(textEditor, file.slides), prevSlides);
 
-            if(compareSlides(absSlide, preview.slide) != 0) {
-                preview.slide = absSlide;
+            if(compareSlides(absSlide, preview.shownSlide) != 0) {
+                preview.shownSlide = absSlide;
                 showSlideInPreview(preview);
             }
         }),
@@ -106,7 +106,7 @@ function openPreviewToTheSide(context: vscode.ExtensionContext) {
         }
 
         // this is the absolute slide
-        preview.slide = shiftSlide(getEditorSlide(textEditor, file.slides), prevSlides);
+        preview.shownSlide = shiftSlide(getEditorSlide(textEditor, file.slides), prevSlides);
 
         if(!preview.server) {
             startServer(context, preview);
@@ -168,7 +168,9 @@ function parseSlides(markdown: string): Slide[] {
 }
 
 // Finds in which slide (of those in slides) the editor's cursor is located at
-function getEditorSlide(textEditor: vscode.TextEditor, slides: Slide[]) {
+// The returned slide is relative to this file.
+//
+function getEditorSlide(textEditor: vscode.TextEditor, slides: Slide[]): Slide {
     let cursor = textEditor.document.offsetAt(textEditor.selection.active);
 
     let i;
@@ -193,15 +195,16 @@ function shiftSlide(slide: Slide, n: number): Slide {
     };
 }
 
-function showSlideInEditor(textEditor: vscode.TextEditor, slide: Slide, file: File) {
+// Show a slide (relative to the current file) in the editor
+function showSlideInEditor(textEditor: vscode.TextEditor, relSlide: Slide, file: File) {
     // if the cursor is already anywhere inside the requested slide, do nothing
     var curSlide = getEditorSlide(textEditor, file.slides);
-    if(compareSlides(curSlide, slide) == 0)
+    if(compareSlides(curSlide, relSlide) == 0)
         return;
 
     let i;
     for(i = 0; i < file.slides.length; i++)
-        if(compareSlides(file.slides[i], slide) > 0)
+        if(compareSlides(file.slides[i], relSlide) > 0)
             break;
 
     let startOffset = file.slides[i-1].offset;
@@ -218,8 +221,7 @@ function showSlideInEditor(textEditor: vscode.TextEditor, slide: Slide, file: Fi
 }
 
 function showSlideInPreview(preview: Preview) {
-    const url = `http://localhost:${preview.port}/${preview.urlPath}#/${preview.slide.horiz}/${preview.slide.vert}`;
-    preview.panel.webview.postMessage({ command: "set_iframe_url", url: url });
+    preview.panel.webview.postMessage({ command: "show_slide", slide: preview.shownSlide });
 }
 
 function getDocumentPreview(document: vscode.TextDocument): Preview {
@@ -348,11 +350,15 @@ function showPanel(context: vscode.ExtensionContext, preview: Preview) {
     // Handle messages from the webview
     preview.panel.webview.onDidReceiveMessage(
         message => {
-            console.log("got message from the webview", message);
+            // console.log("got message from the webview", message);
             if(message.eventName != "slidechanged")
                 return;
 
-            let slide = { horiz: message.state.indexh, vert: message.state.indexv };
+            let absSlide = { horiz: message.state.indexh, vert: message.state.indexv };
+            if(compareSlides(absSlide, preview.shownSlide) == 0)
+                return;
+            preview.shownSlide = absSlide;
+
             let file: File;
             let prevSlides = 0;
 
@@ -360,7 +366,7 @@ function showPanel(context: vscode.ExtensionContext, preview: Preview) {
                 if(!f.slides.length) continue;
                 const lastSlide = shiftSlide(f.slides[f.slides.length-1], prevSlides);
 
-                if(compareSlides(lastSlide, slide) >= 0) {
+                if(compareSlides(lastSlide, absSlide) >= 0) {
                     file = f;
                     break;
                 } else {
@@ -371,8 +377,9 @@ function showPanel(context: vscode.ExtensionContext, preview: Preview) {
 
             for(let editor of vscode.window.visibleTextEditors) {
                 if(editor.document.fileName == file.fileName) {
-                    showSlideInEditor(editor, shiftSlide(slide, -prevSlides), file);
-                    return;
+                    // pass relative slide to showSlideInEditor
+                    showSlideInEditor(editor, shiftSlide(absSlide, -prevSlides), file);
+                    break;
                 }
             }
         },
@@ -407,7 +414,7 @@ export function deactivate() {
 }
 
 function getPreviewHtml(preview: Preview): string {
-    const url = `http://localhost:${preview.port}/${preview.urlPath}#/${preview.slide.horiz}/${preview.slide.vert}`;
+    const url = `http://localhost:${preview.port}/${preview.urlPath}#/${preview.shownSlide.horiz}/${preview.shownSlide.vert}`;
 
     return `
         <html>
@@ -448,7 +455,7 @@ function getPreviewHtml(preview: Preview): string {
                     if(typeof(msg) == "string") {
                         vscode.postMessage(JSON.parse(msg));
                     } else {
-                        iframe.src = msg.url;
+                        iframe.contentWindow.postMessage(JSON.stringify({ method: 'slide', args: [ msg.slide.horiz, msg.slide.vert ] }), '*');
                     }
                 });
                 </script>
