@@ -233,7 +233,7 @@ function createDocumentPreview(document: vscode.TextDocument): Preview {
     if(previews.has(fileName))
         return previews.get(fileName);
 
-    const match = fileName.match(`^(.*)${path.sep}content${path.sep}.*\.md$`);
+    const match = fileName.match(`^(.*)\\${path.sep}content\\${path.sep}.*\.md$`);
     if (!match) return;
     const hugoRoot = match[1];
 
