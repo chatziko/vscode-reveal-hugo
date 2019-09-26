@@ -2,7 +2,7 @@
     "name": "vscode-reveal-hugo",
     "displayName": "vscode-reveal-hugo",
     "description": "Build presentations with reveal.js and hugo",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "publisher": "chatziko",
     "engines": {
         "vscode": "^1.23.0"
@@ -18,10 +18,10 @@
     ],
     "repository": {
         "type": "git",
-        "url": "https://github.com/chatzi/vscode-reveal-hugo"
+        "url": "https://github.com/chatziko/vscode-reveal-hugo"
     },
     "bugs": {
-        "url": "https://github.com/chatzi/vscode-reveal-hugo/issues"
+        "url": "https://github.com/chatziko/vscode-reveal-hugo/issues"
     },
     "license": "MIT",
     "activationEvents": [
