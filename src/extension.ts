@@ -128,7 +128,7 @@ function parseWeight(fileName: string, markdown: string): number {
 function parseSlides(markdown: string): Slide[] {
     // TODO: detect empty doc with 0 slides
  
-    let re = /^(\n---+\n|\n\*\*\*+\n|\n___+\n|(```+).*|{{% \/?section %}})$/gm;
+    let re = /^(\r?\n---+\r?\n|\r?\n\*\*\*+\r?\n|\r?\n___+\r?\n|(```+).*|{{% \/?section %}})$/gm;
     let match;
     let h = 0, v = 0;
     let inCodeFence = "", inVertical = false;
