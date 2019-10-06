@@ -127,40 +127,61 @@ function parseWeight(fileName: string, markdown: string): number {
 
 function parseSlides(markdown: string): Slide[] {
     // TODO: detect empty doc with 0 slides
+    const CODE_FENCE = 0;
+    const UNKNOWN = 1;
  
-    let re = /^(\r?\n---+\r?\n|\r?\n\*\*\*+\r?\n|\r?\n___+\r?\n|(```+).*|{{% \/?section %}})$/gm;
+    // To parse faster, we only find the lines we care about using a regex
+    //   slide separators | code fences | section separators
+    //
+    // Slide separators are tricky. "---" separates slides only when turned into <hr>,
+    // but "---" is also used in underline-ish headers, eg "Title\n---".
+    // We support only 2 main cases for "---":
+    // - "---" is preceeded by an empty line
+    // - "---" is preceeded by a code fence
+    //
+    let re = /^(\r?\n?(---+|\*\*\*+|___+)|(```+)[ \t]*(.*)|{{% \/?section %}})$/gm;
+
     let match;
     let h = 0, v = 0;
     let inCodeFence = "", inVertical = false;
-    let slides = [{ horiz: 0, vert: 0, offset: 0 }];       // first slide
+    let slides = [{ horiz: 0, vert: 0, offset: 0 }];        // first slide
+    let last = UNKNOWN;                                     // what is the last match we saw
+    let endOfLast = -1;                                     // index after the last match
 
     while(match = re.exec(markdown)) {
         let s = match[0];
-        
+        const prev = endOfLast >= match.index ? last : UNKNOWN;     // Do we know what is the exact previous line?
+        endOfLast = match.index + s.length;                         // End of last seen line
+        endOfLast += markdown.substr(endOfLast, 1) == "\r" ? 2 : 1; // include newline
+        last = UNKNOWN;
+
         // code fences
         if(s.substr(0, 1) == "`") {
             if(!inCodeFence)
-                inCodeFence = match[2];
-            else if(inCodeFence == match[1])
+                inCodeFence = match[3];
+            else if(inCodeFence == match[3] && !match[4])
                 inCodeFence = "";
 
-            continue;
-        }
-        if(inCodeFence) continue;       // ignore everything inside a code fence
-        
-        if(s == "{{% section %}}") {
+            last = CODE_FENCE;
+
+        } else if(inCodeFence) {
+            // ignore everything inside a code fence
+ 
+        } else if(s == "{{% section %}}") {
             // This simply declares that future slides are vertical, does not affect the current slide
             inVertical = true;
-            
+
         } else if(s == "{{% /section %}}") {
             // This simply declares that future slides are horizontal, does not affect the current slide
             v = 0;
             inVertical = false;
 
-        } else {
-            // horizontal rule: starts a new slide
+        } else if(s.substr(0, 1) != "-" || prev == CODE_FENCE) {
+            // horizontal rule: starts a new slide.
+            // For  "---" without preceeding blank lin, the previous match has to be a code fence.
+            //
             inVertical ? v++ : h++;
-            slides.push({ horiz: h, vert: v, offset: match.index + s.length });
+            slides.push({ horiz: h, vert: v, offset: endOfLast });
         }
     }
 
