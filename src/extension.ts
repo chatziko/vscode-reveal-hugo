@@ -36,30 +36,28 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor((event) => {
+            // Called when a new tab becomes active
+            // Note: when a tab is hidden, the cursor moves to (0,0) and is restored _after_ it becomes visible
+            // again (i.e. _after_ this event). So to get the correct cursor position, we just wait a bit before
+            // calling showEditorPositionInPreview
+            //
+            setTimeout(() => {
+                // make sure to use the current activeTextEditor, it might no longer be == event
+                if(vscode.window.activeTextEditor)
+                    showEditorPositionInPreview(vscode.window.activeTextEditor);
+            }, 100);
+        }),
+
         vscode.window.onDidChangeTextEditorSelection((event) => {
-            const textEditor = event.textEditor as vscode.TextEditor;
-            const preview = getDocumentPreview(textEditor.document);
-            if(!preview)
-                return;
-
-            // find the file that is shown in the editor
-            let file = preview.files.find(f => f.fileName == textEditor.document.fileName);
-            if(!file) return;
-
-            // find how many horizontal slides are before this file
-            let prevSlides = 0;
-            for(let f of preview.files) {
-                if(f === file) break;
-                prevSlides += f.slides[f.slides.length - 1].horiz + 1;
-            }
-
-            // this is the absolute slide, if it's different than the currently displayed one, show it
-            const absSlide = shiftSlide(getEditorSlide(textEditor, file.slides), prevSlides);
-
-            if(compareSlides(absSlide, preview.shownSlide) != 0) {
-                preview.shownSlide = absSlide;
-                showSlideInPreview(preview);
-            }
+            // This is called in 2 cases:
+            // - when the selection is changed by the user (event.kind != underfined), in this case we show the new position in the preview
+            // - when the tab changes, the cursor moves automatically to (0,0), so the event fires if it's not there already, and fires again
+            //   when the tab is re-selected and the cursor returs to its original position. In this case event.kind == undefined, and we ignore
+            //   the event, tab changes are handled by onDidChangeActiveTextEditor anyway
+            //
+            if(event.kind != undefined)
+                showEditorPositionInPreview(event.textEditor);
         }),
 
         vscode.workspace.onDidChangeTextDocument((event) => {
@@ -114,6 +112,34 @@ function openPreviewToTheSide(context: vscode.ExtensionContext) {
             showSlideInPreview(preview);
         }
     };        
+}
+
+// called when an editor becomes active or changes selection. If the editor is associated with a preview,
+// we update the preview's slide to match the editors current position.
+//
+function showEditorPositionInPreview(textEditor: vscode.TextEditor) {
+    const preview = getDocumentPreview(textEditor.document);
+    if(!preview)
+        return;
+
+    // find the file that is shown in the editor
+    let file = preview.files.find(f => f.fileName == textEditor.document.fileName);
+    if(!file) return;
+
+    // find how many horizontal slides are before this file
+    let prevSlides = 0;
+    for(let f of preview.files) {
+        if(f === file) break;
+        prevSlides += f.slides[f.slides.length - 1].horiz + 1;
+    }
+
+    // this is the absolute slide, if it's different than the currently displayed one, show it
+    const absSlide = shiftSlide(getEditorSlide(textEditor, file.slides), prevSlides);
+
+    if(compareSlides(absSlide, preview.shownSlide) != 0) {
+        preview.shownSlide = absSlide;
+        showSlideInPreview(preview);
+    }
 }
 
 function parseWeight(fileName: string, markdown: string): number {
