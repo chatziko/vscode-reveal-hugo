@@ -461,7 +461,7 @@ export function deactivate() {
 }
 
 function getPreviewHtml(preview: Preview): string {
-    const url = `http://localhost:${preview.port}/${preview.urlPath}#/${preview.shownSlide.horiz}/${preview.shownSlide.vert}`;
+    const url = `http://localhost:${preview.port}/${preview.urlPath}?postMessageEvents=true#/${preview.shownSlide.horiz}/${preview.shownSlide.vert}`;
 
     return `
         <html>
